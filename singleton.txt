@@ -1,0 +1,2011 @@
+singleton
+
+
+# Cell 1: Import Required Libraries
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
+
+print("All libraries imported successfully!")
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 2: Scrape Weather Data (using Open-Meteo API as example)
+# ============================================================================
+
+def scrape_weather_data(latitude=40.7128, longitude=-74.0060, days=30):
+    """
+    Scrape weather data for agricultural analysis
+    Parameters: latitude, longitude, days (historical days)
+    Returns: DataFrame with weather data
+    """
+    # Calculate date range
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Open-Meteo API (free, no key required)
+    url = f"https://api.open-meteo.com/v1/forecast"
+    params = {
+        'latitude': latitude,
+        'longitude': longitude,
+        'start_date': start_date.strftime('%Y-%m-%d'),
+        'end_date': end_date.strftime('%Y-%m-%d'),
+        'daily': 'temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max',
+        'timezone': 'auto'
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        
+        # Create DataFrame
+        weather_df = pd.DataFrame({
+            'date': data['daily']['time'],
+            'temp_max': data['daily']['temperature_2m_max'],
+            'temp_min': data['daily']['temperature_2m_min'],
+            'precipitation': data['daily']['precipitation_sum'],
+            'wind_speed': data['daily']['windspeed_10m_max']
+        })
+        
+        weather_df['date'] = pd.to_datetime(weather_df['date'])
+        weather_df['temp_avg'] = (weather_df['temp_max'] + weather_df['temp_min']) / 2
+        
+        print(f"Weather data scraped successfully! Shape: {weather_df.shape}")
+        return weather_df
+    
+    except Exception as e:
+        print(f"Error scraping weather data: {e}")
+        return None
+
+# Execute the function
+weather_data = scrape_weather_data(latitude=40.7128, longitude=-74.0060, days=30)
+print("\nWeather Data Sample:")
+print(weather_data.head())
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 3: Generate Synthetic Soil Data (Since real soil APIs need authentication)
+# ============================================================================
+
+def generate_soil_data(num_samples=100):
+    """
+    Generate synthetic soil data for demonstration
+    In production, you'd scrape from soil databases or agricultural APIs
+    """
+    np.random.seed(42)
+    
+    soil_data = pd.DataFrame({
+        'sample_id': range(1, num_samples + 1),
+        'ph_level': np.random.normal(6.5, 0.8, num_samples),
+        'nitrogen_ppm': np.random.normal(45, 10, num_samples),
+        'phosphorus_ppm': np.random.normal(30, 8, num_samples),
+        'potassium_ppm': np.random.normal(120, 20, num_samples),
+        'organic_matter_%': np.random.normal(3.5, 0.7, num_samples),
+        'moisture_%': np.random.normal(25, 5, num_samples),
+        'soil_type': np.random.choice(['Clay', 'Loam', 'Sandy', 'Silt'], num_samples)
+    })
+    
+    print(f"Soil data generated successfully! Shape: {soil_data.shape}")
+    return soil_data
+
+# Execute the function
+soil_data = generate_soil_data(num_samples=100)
+print("\nSoil Data Sample:")
+print(soil_data.head())
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 4: Generate Synthetic Crop Yield Data
+# ============================================================================
+
+def generate_crop_yield_data(num_records=150):
+    """
+    Generate synthetic crop yield data
+    In production, you'd scrape from agricultural databases
+    """
+    np.random.seed(42)
+    
+    crops = ['Wheat', 'Rice', 'Corn', 'Soybean', 'Barley']
+    regions = ['North', 'South', 'East', 'West', 'Central']
+    years = [2020, 2021, 2022, 2023, 2024]
+    
+    crop_data = pd.DataFrame({
+        'crop_type': np.random.choice(crops, num_records),
+        'region': np.random.choice(regions, num_records),
+        'year': np.random.choice(years, num_records),
+        'area_hectares': np.random.uniform(50, 500, num_records),
+        'yield_tons': np.random.uniform(2, 8, num_records),
+        'rainfall_mm': np.random.uniform(400, 1200, num_records),
+        'temperature_avg': np.random.uniform(15, 30, num_records),
+        'fertilizer_kg': np.random.uniform(100, 400, num_records)
+    })
+    
+    # Calculate yield per hectare
+    crop_data['yield_per_hectare'] = crop_data['yield_tons'] / crop_data['area_hectares']
+    
+    print(f"Crop yield data generated successfully! Shape: {crop_data.shape}")
+    return crop_data
+
+# Execute the function
+crop_yield_data = generate_crop_yield_data(num_records=150)
+print("\nCrop Yield Data Sample:")
+print(crop_yield_data.head())
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 5: Data Cleaning - Handle Missing Values
+# ============================================================================
+
+def clean_missing_values(df, strategy='mean'):
+    """
+    Handle missing values in the dataset
+    Strategies: 'mean', 'median', 'mode', 'drop'
+    """
+    print(f"\nOriginal DataFrame shape: {df.shape}")
+    print(f"Missing values before cleaning:\n{df.isnull().sum()}")
+    
+    df_cleaned = df.copy()
+    
+    # Introduce some missing values for demonstration
+    for col in df_cleaned.select_dtypes(include=[np.number]).columns[:3]:
+        mask = np.random.random(len(df_cleaned)) < 0.05
+        df_cleaned.loc[mask, col] = np.nan
+    
+    print(f"\nMissing values after introducing NaNs:\n{df_cleaned.isnull().sum()}")
+    
+    # Handle numeric columns
+    numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
+    
+    if strategy == 'mean':
+        df_cleaned[numeric_cols] = df_cleaned[numeric_cols].fillna(df_cleaned[numeric_cols].mean())
+    elif strategy == 'median':
+        df_cleaned[numeric_cols] = df_cleaned[numeric_cols].fillna(df_cleaned[numeric_cols].median())
+    elif strategy == 'drop':
+        df_cleaned = df_cleaned.dropna()
+    
+    # Handle categorical columns with mode
+    categorical_cols = df_cleaned.select_dtypes(include=['object']).columns
+    for col in categorical_cols:
+        if df_cleaned[col].isnull().any():
+            df_cleaned[col].fillna(df_cleaned[col].mode()[0], inplace=True)
+    
+    print(f"\nMissing values after cleaning:\n{df_cleaned.isnull().sum()}")
+    print(f"Cleaned DataFrame shape: {df_cleaned.shape}")
+    
+    return df_cleaned
+
+# Clean the crop yield data
+crop_yield_clean = clean_missing_values(crop_yield_data, strategy='mean')
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 6: Data Cleaning - Handle Outliers
+# ============================================================================
+
+def detect_and_handle_outliers(df, columns, method='iqr', action='cap'):
+    """
+    Detect and handle outliers using IQR or Z-score method
+    Actions: 'cap' (winsorize), 'remove', 'flag'
+    """
+    df_cleaned = df.copy()
+    outlier_info = {}
+    
+    for col in columns:
+        if col not in df_cleaned.columns:
+            continue
+            
+        if method == 'iqr':
+            Q1 = df_cleaned[col].quantile(0.25)
+            Q3 = df_cleaned[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            outliers = ((df_cleaned[col] < lower_bound) | (df_cleaned[col] > upper_bound))
+            outlier_count = outliers.sum()
+            
+            if action == 'cap':
+                df_cleaned[col] = df_cleaned[col].clip(lower=lower_bound, upper=upper_bound)
+            elif action == 'remove':
+                df_cleaned = df_cleaned[~outliers]
+            elif action == 'flag':
+                df_cleaned[f'{col}_outlier'] = outliers
+            
+            outlier_info[col] = {
+                'count': outlier_count,
+                'percentage': (outlier_count / len(df)) * 100,
+                'lower_bound': lower_bound,
+                'upper_bound': upper_bound
+            }
+    
+    print("\nOutlier Detection Results:")
+    for col, info in outlier_info.items():
+        print(f"{col}: {info['count']} outliers ({info['percentage']:.2f}%)")
+    
+    return df_cleaned, outlier_info
+
+# Detect and handle outliers
+numeric_columns = ['yield_tons', 'rainfall_mm', 'temperature_avg', 'fertilizer_kg']
+crop_yield_clean, outlier_info = detect_and_handle_outliers(
+    crop_yield_clean, 
+    numeric_columns, 
+    method='iqr', 
+    action='cap'
+)
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 7: Normalize Data
+# ============================================================================
+
+def normalize_data(df, columns, method='minmax'):
+    """
+    Normalize numerical data
+    Methods: 'minmax' (0-1), 'zscore' (standardization)
+    """
+    df_normalized = df.copy()
+    
+    for col in columns:
+        if col not in df_normalized.columns:
+            continue
+            
+        if method == 'minmax':
+            min_val = df_normalized[col].min()
+            max_val = df_normalized[col].max()
+            df_normalized[f'{col}_normalized'] = (df_normalized[col] - min_val) / (max_val - min_val)
+        
+        elif method == 'zscore':
+            mean_val = df_normalized[col].mean()
+            std_val = df_normalized[col].std()
+            df_normalized[f'{col}_normalized'] = (df_normalized[col] - mean_val) / std_val
+    
+    print(f"\nNormalization complete using {method} method")
+    print(f"Original columns: {columns}")
+    print(f"New normalized columns: {[f'{col}_normalized' for col in columns]}")
+    
+    return df_normalized
+
+# Normalize specific columns
+columns_to_normalize = ['yield_tons', 'rainfall_mm', 'temperature_avg']
+crop_yield_normalized = normalize_data(crop_yield_clean, columns_to_normalize, method='minmax')
+print("\nNormalized Data Sample:")
+print(crop_yield_normalized[['yield_tons', 'yield_tons_normalized']].head())
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 8: Descriptive Statistics
+# ============================================================================
+
+def calculate_descriptive_stats(df, numeric_only=True):
+    """
+    Calculate comprehensive descriptive statistics
+    """
+    if numeric_only:
+        df_numeric = df.select_dtypes(include=[np.number])
+    else:
+        df_numeric = df
+    
+    stats = df_numeric.describe()
+    
+    # Additional statistics
+    additional_stats = pd.DataFrame({
+        'skewness': df_numeric.skew(),
+        'kurtosis': df_numeric.kurtosis(),
+        'variance': df_numeric.var()
+    })
+    
+    print("Descriptive Statistics:")
+    print(stats)
+    print("\nAdditional Statistics:")
+    print(additional_stats)
+    
+    return stats, additional_stats
+
+# Calculate statistics
+stats, additional_stats = calculate_descriptive_stats(crop_yield_clean)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 9: Visualize Data Distributions
+# ============================================================================
+
+def plot_distributions(df, columns, figsize=(15, 10)):
+    """
+    Plot distributions of numerical variables
+    """
+    n_cols = len(columns)
+    n_rows = (n_cols + 2) // 3
+    
+    fig, axes = plt.subplots(n_rows, 3, figsize=figsize)
+    axes = axes.flatten()
+    
+    for idx, col in enumerate(columns):
+        if col in df.columns:
+            # Histogram with KDE
+            axes[idx].hist(df[col].dropna(), bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+            axes[idx].set_title(f'Distribution of {col}', fontsize=10, fontweight='bold')
+            axes[idx].set_xlabel(col)
+            axes[idx].set_ylabel('Frequency')
+            axes[idx].grid(True, alpha=0.3)
+    
+    # Hide empty subplots
+    for idx in range(len(columns), len(axes)):
+        axes[idx].axis('off')
+    
+    plt.tight_layout()
+    plt.savefig('distribution_plots.png', dpi=300, bbox_inches='tight')
+    print("Distribution plots saved as 'distribution_plots.png'")
+    plt.show()
+
+# Plot distributions
+columns_to_plot = ['yield_tons', 'rainfall_mm', 'temperature_avg', 'fertilizer_kg', 'yield_per_hectare']
+plot_distributions(crop_yield_clean, columns_to_plot)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 10: Visualize Trends Over Time
+# ============================================================================
+
+def plot_trends(df, x_col, y_col, group_col=None, figsize=(12, 6)):
+    """
+    Plot trends over time or categories
+    """
+    plt.figure(figsize=figsize)
+    
+    if group_col and group_col in df.columns:
+        for group in df[group_col].unique():
+            subset = df[df[group_col] == group]
+            grouped = subset.groupby(x_col)[y_col].mean()
+            plt.plot(grouped.index, grouped.values, marker='o', label=group, linewidth=2)
+        plt.legend(title=group_col)
+    else:
+        grouped = df.groupby(x_col)[y_col].mean()
+        plt.plot(grouped.index, grouped.values, marker='o', linewidth=2, color='steelblue')
+    
+    plt.title(f'Trend of {y_col} over {x_col}', fontsize=14, fontweight='bold')
+    plt.xlabel(x_col, fontsize=12)
+    plt.ylabel(f'Average {y_col}', fontsize=12)
+    plt.grid(True, alpha=0.3)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('trend_plots.png', dpi=300, bbox_inches='tight')
+    print("Trend plots saved as 'trend_plots.png'")
+    plt.show()
+
+# Plot trends
+plot_trends(crop_yield_clean, 'year', 'yield_tons', group_col='crop_type')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 11: Correlation Analysis
+# ============================================================================
+def analyze_correlations(df, method='pearson', figsize=(10, 8)):
+    """
+    Calculate and visualize correlations between variables
+    Methods: 'pearson', 'spearman', 'kendall'
+    """
+    # Select numeric columns only
+    numeric_df = df.select_dtypes(include=[np.number])
+    
+    # Calculate correlation matrix
+    corr_matrix = numeric_df.corr(method=method)
+    
+    # Create heatmap
+    plt.figure(figsize=figsize)
+    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', 
+                center=0, square=True, linewidths=1, cbar_kws={"shrink": 0.8})
+    plt.title(f'Correlation Matrix ({method.capitalize()})', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig('correlation_heatmap.png', dpi=300, bbox_inches='tight')
+    print("Correlation heatmap saved as 'correlation_heatmap.png'")
+    plt.show()
+    
+    # Print strong correlations
+    print(f"\nStrong Correlations (|r| > 0.5):")
+    for i in range(len(corr_matrix.columns)):
+        for j in range(i+1, len(corr_matrix.columns)):
+            if abs(corr_matrix.iloc[i, j]) > 0.5:
+                print(f"{corr_matrix.columns[i]} <-> {corr_matrix.columns[j]}: {corr_matrix.iloc[i, j]:.3f}")
+    
+    return corr_matrix
+
+# Analyze correlations
+correlation_matrix = analyze_correlations(crop_yield_clean, method='pearson')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 12: Scatter Plots for Relationships
+# ============================================================================
+
+def plot_scatter_relationships(df, x_col, y_col, hue_col=None, figsize=(10, 6)):
+    """
+    Create scatter plots to visualize relationships
+    """
+    plt.figure(figsize=figsize)
+    
+    if hue_col and hue_col in df.columns:
+        for category in df[hue_col].unique():
+            subset = df[df[hue_col] == category]
+            plt.scatter(subset[x_col], subset[y_col], label=category, alpha=0.6, s=50)
+        plt.legend(title=hue_col)
+    else:
+        plt.scatter(df[x_col], df[y_col], alpha=0.6, s=50, color='steelblue')
+    
+    plt.title(f'{y_col} vs {x_col}', fontsize=14, fontweight='bold')
+    plt.xlabel(x_col, fontsize=12)
+    plt.ylabel(y_col, fontsize=12)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('scatter_plots.png', dpi=300, bbox_inches='tight')
+    print("Scatter plots saved as 'scatter_plots.png'")
+    plt.show()
+
+# Create scatter plots
+plot_scatter_relationships(crop_yield_clean, 'rainfall_mm', 'yield_tons', hue_col='crop_type')
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 13: Box Plots for Group Comparison
+# ============================================================================
+
+def plot_boxplots(df, category_col, value_col, figsize=(12, 6)):
+    """
+    Create box plots to compare distributions across categories
+    """
+    plt.figure(figsize=figsize)
+    
+    # Prepare data
+    categories = df[category_col].unique()
+    data_to_plot = [df[df[category_col] == cat][value_col].dropna() for cat in categories]
+    
+    bp = plt.boxplot(data_to_plot, labels=categories, patch_artist=True, 
+                     notch=True, showmeans=True)
+    
+    # Customize colors
+    colors = plt.cm.Set3(range(len(categories)))
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+    
+    plt.title(f'{value_col} by {category_col}', fontsize=14, fontweight='bold')
+    plt.xlabel(category_col, fontsize=12)
+    plt.ylabel(value_col, fontsize=12)
+    plt.xticks(rotation=45)
+    plt.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+    plt.savefig('boxplots.png', dpi=300, bbox_inches='tight')
+    print("Box plots saved as 'boxplots.png'")
+    plt.show()
+
+# Create box plots
+plot_boxplots(crop_yield_clean, 'crop_type', 'yield_tons')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 14: Save Cleaned Data
+# ============================================================================
+
+def save_processed_data(df, filename, format='csv'):
+    """
+    Save processed data to file
+    Formats: 'csv', 'excel', 'json'
+    """
+    if format == 'csv':
+        df.to_csv(filename + '.csv', index=False)
+        print(f"Data saved to {filename}.csv")
+    elif format == 'excel':
+        df.to_excel(filename + '.xlsx', index=False)
+        print(f"Data saved to {filename}.xlsx")
+    elif format == 'json':
+        df.to_json(filename + '.json', orient='records', indent=2)
+        print(f"Data saved to {filename}.json")
+
+# Save all processed datasets
+save_processed_data(weather_data, 'weather_data_cleaned', format='csv')
+save_processed_data(soil_data, 'soil_data_cleaned', format='csv')
+save_processed_data(crop_yield_clean, 'crop_yield_data_cleaned', format='csv')
+
+print("\n" + "="*70)
+print("AGRICULTURAL DATA ANALYSIS COMPLETE!")
+print("="*70)
+print(f"\nTotal records processed:")
+print(f"  - Weather data: {len(weather_data)} records")
+print(f"  - Soil data: {len(soil_data)} records")
+print(f"  - Crop yield data: {len(crop_yield_clean)} records")
+print("\nAll visualizations and cleaned data have been saved!")
+
+
+________________________________________________________________________________________________________________
+
+
+assignment_2
+
+!pip install statsmodels
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.stattools import adfuller
+from sklearn.metrics import mean_squared_error
+import warnings
+
+
+
+
+
+
+
+
+# Suppress harmless warnings for cleaner output
+warnings.filterwarnings("ignore")
+
+def generate_synthetic_data(start_date, periods, freq='D'):
+    """
+    Generates a synthetic daily temperature time series.
+    The data simulates a seasonal trend with some randomness.
+    """
+    np.random.seed(42)
+    
+    # Create a date range
+    dates = pd.date_range(start=start_date, periods=periods, freq=freq)
+    
+    # Simulate a base temperature (e.g., 25 degrees C)
+    base_temp = 25
+    
+    # Add a strong seasonal component (sine wave for yearly cycle)
+    # The amplitude is 5, and the frequency is based on 365.25 days
+    seasonal_component = 5 * np.sin(2 * np.pi * dates.dayofyear / 365.25)
+    
+    # Add a weak trend component (slight heating over time)
+    trend_component = 0.01 * np.arange(periods)
+    
+    # Add random noise
+    noise = np.random.normal(0, 1.5, periods)
+    
+    # Calculate final temperature
+    temperature = base_temp + seasonal_component + trend_component + noise
+    
+    # Create the DataFrame
+    df = pd.DataFrame({'Temperature': temperature}, index=dates)
+    return df
+
+# Parameters for data generation
+START_DATE = '2020-01-01'
+PERIODS = 1000 # ~2.7 years of daily data
+PREDICTION_STEPS = 90 # Predict 90 days into the future
+
+# Execute data generation
+df_weather = generate_synthetic_data(START_DATE, PERIODS)
+
+print("--- Data Generation Complete ---")
+print(f"Dataset Shape: {df_weather.shape}")
+print("First 5 entries:")
+print(df_weather.head())
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 2: Exploratory Data Analysis (EDA) and Visualization
+# ==============================================================================
+
+def visualize_time_series(df, series_name):
+    """Visualizes the time series data."""
+    plt.figure(figsize=(12, 6))
+    plt.plot(df.index, df[series_name], label=series_name)
+    plt.title(f'Historical {series_name} Over Time')
+    plt.xlabel('Date')
+    plt.ylabel(series_name)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend()
+    plt.show()
+
+# Execute visualization
+visualize_time_series(df_weather, 'Temperature')
+print("--- Visualization Complete ---")
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 3: Stationarity Check (ADF Test)
+# ==============================================================================
+
+def check_stationarity(series):
+    """
+    Performs the Augmented Dickey-Fuller (ADF) test to check for stationarity.
+    A p-value below 0.05 suggests the data is stationary.
+    """
+    print("--- Running Augmented Dickey-Fuller Test ---")
+    result = adfuller(series.dropna(), autolag='AIC')
+    
+    print('ADF Statistic: %f' % result[0])
+    print('p-value: %f' % result[1])
+    print('Critical Values:')
+    for key, value in result[4].items():
+        print('\t%s: %.3f' % (key, value))
+
+    if result[1] <= 0.05:
+        print("\nConclusion: The time series is likely Stationary (p-value <= 0.05).")
+        # D (differencing order) = 0 is a good starting point for ARIMA
+        return 0
+    else:
+        print("\nConclusion: The time series is likely Non-Stationary (p-value > 0.05).")
+        # If non-stationary, we would typically difference the data and re-test.
+        # For simplicity, we assume d=1 if non-stationary and skip further differencing here.
+        return 1
+
+# Execute stationarity check and determine differencing order (d)
+d_order = check_stationarity(df_weather['Temperature'])
+print(f"\nDetermined differencing order (d) for ARIMA: {d_order}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 4: Model Training (ARIMA)
+# ==============================================================================
+
+# Split data into training and testing sets (use last 180 days for test)
+TRAIN_SIZE = PERIODS - 180
+df_train = df_weather[:TRAIN_SIZE]
+df_test = df_weather[TRAIN_SIZE:]
+
+def train_arima_model(train_data, order):
+    """
+    Trains an ARIMA model on the provided time series data.
+    Order is a tuple (p, d, q).
+    """
+    print(f"\n--- Training ARIMA Model with order={order} ---")
+    
+    # Initialize and fit the ARIMA model
+    # We use a simple (5, d, 0) non-seasonal order as a starting point.
+    # p=5 (AutoRegressive): Uses 5 previous time steps.
+    # d=d_order (Integrated): Differencing term from stationarity check.
+    # q=0 (Moving Average): Using no Moving Average term initially.
+    
+    model = ARIMA(train_data, order=order)
+    model_fit = model.fit()
+    
+    print(model_fit.summary())
+    return model_fit
+
+# Set model order (p, d, q)
+arima_order = (5, d_order, 0)
+
+# Execute model training
+arima_model = train_arima_model(df_train['Temperature'], arima_order)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ # ==============================================================================
+# CELL 5: Forecasting and Evaluation (FIX APPLIED HERE)
+# ==============================================================================
+
+def evaluate_and_forecast(model_fit, train_data, test_data, series_name, steps):
+    """
+    Generates in-sample predictions, measures performance on test data, 
+    and forecasts future values.
+    """
+    
+    # 1. In-sample Prediction (against test data for evaluation)
+    # Start prediction from the first test index to the end of the test set
+    start_idx = test_data.index[0]
+    end_idx = test_data.index[-1]
+    
+    predictions_test = model_fit.predict(start=start_idx, end=end_idx, dynamic=False)
+    
+    # Calculate RMSE on test set
+    # FIX: Since test_data is passed as a Series (df_test['Temperature']), 
+    # we use test_data directly instead of test_data[series_name]
+    rmse = np.sqrt(mean_squared_error(test_data, predictions_test)) # <-- FIX IS HERE
+    print(f"\nRoot Mean Squared Error (RMSE) on Test Data: {rmse:.2f}")
+
+    # 2. Future Forecasting
+    
+    # Determine the start date for the forecast (day after the last day of the full data)
+    forecast_start_date = train_data.index[-1] + pd.Timedelta(days=1)
+    
+    # Predict N steps into the future, starting from the end of the full dataset
+    forecast_result = model_fit.get_forecast(steps=steps)
+    
+    forecast_values = forecast_result.predicted_mean
+    confidence_intervals = forecast_result.conf_int()
+    
+    # Create a DataFrame for the forecast
+    forecast_index = pd.date_range(start=forecast_start_date, periods=steps)
+    df_forecast = pd.DataFrame({
+        'Predicted': forecast_values.values,
+        'Lower Bound (95%)': confidence_intervals.iloc[:, 0].values,
+        'Upper Bound (95%)': confidence_intervals.iloc[:, 1].values,
+    }, index=forecast_index)
+
+    return predictions_test, df_forecast
+
+# Execute forecasting and evaluation
+predictions_test, df_future_forecast = evaluate_and_forecast(
+    arima_model, 
+    df_train['Temperature'], 
+    df_test['Temperature'], 
+    'Temperature', 
+    PREDICTION_STEPS
+)
+
+print("\n--- Future Forecast Complete ---")
+print(f"Forecast for the next {PREDICTION_STEPS} days:")
+print(df_future_forecast.head(5))
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 6: Final Visualization of Results
+# ==============================================================================
+# (Rest of the code remains the same, including the fix in the previous response)
+def plot_forecast(df_full, df_test, predictions_test, df_forecast, series_name):
+    """Plots the historical data, test predictions, and future forecast."""
+    
+    plt.figure(figsize=(14, 8))
+    
+    # 1. Plot Historical Data (Training + Actual Test Data)
+    # Plotting the entire historical series for continuity
+    plt.plot(df_full.index, df_full[series_name], label='Historical Data (Train + Test Actual)', color='skyblue')
+    
+    # 2. Plot Test Data (Actual values) 
+    # plt.plot(df_test.index, df_test[series_name], label='Actual Test Data', color='darkorange', alpha=0.7) # This line is often redundant
+    
+    # 3. Plot Test Predictions
+    plt.plot(predictions_test.index, predictions_test, label='Test Predictions', color='firebrick', linestyle='--')
+    
+    # 4. Plot Future Forecast
+    plt.plot(df_forecast.index, df_forecast['Predicted'], label='Future Forecast', color='green', linewidth=2)
+    
+    # 5. Plot Confidence Interval (shaded area)
+    plt.fill_between(
+        df_forecast.index,
+        df_forecast['Lower Bound (95%)'],
+        df_forecast['Upper Bound (95%)'],
+        color='lightgreen',
+        alpha=0.3,
+        label='95% Confidence Interval'
+    )
+    
+    plt.title(f'ARIMA Model: {series_name} Forecast vs. Actual')
+    plt.xlabel('Date')
+    plt.ylabel(series_name)
+    # Draw a vertical line at the start of the test period
+    plt.axvline(df_test.index[0], color='gray', linestyle=':', label='Start of Test Period / Forecast Horizon')
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.show()
+
+# Execute final visualization - FIX FROM PREVIOUS TURN: pass the full df_weather
+plot_forecast(df_weather, df_test, predictions_test, df_future_forecast, 'Temperature')
+print("--- Final Visualization Complete ---")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+__________________________________________________________________________________________________________________
+assignmrnt_3
+
+assignment_03
+
+dataset = https://www.kaggle.com/datasets/majidiqbalvhr/crop-yield-dataset
+
+import pandas as pd
+df = pd.read_csv('/content/sample_data/crop_yield.csv')
+df.head()
+
+
+Perform data visualization, build and train XGBoost, evaluate their accuracy.
+
+
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Scatter plots
+plt.figure(figsize=(12, 5))
+
+plt.subplot(1, 2, 1)
+sns.scatterplot(data=df, x='Rainfall_mm', y='Yield_tons_per_hectare')
+plt.title('Rainfall vs. Yield')
+
+plt.subplot(1, 2, 2)
+sns.scatterplot(data=df, x='Temperature_Celsius', y='Yield_tons_per_hectare')
+plt.title('Temperature vs. Yield')
+
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+# Box plots for categorical features
+categorical_features = ['Region', 'Soil_Type', 'Crop', 'Weather_Condition']
+plt.figure(figsize=(15, 10))
+
+for i, col in enumerate(categorical_features):
+    plt.subplot(2, 2, i + 1)
+    sns.boxplot(data=df, x=col, y='Yield_tons_per_hectare')
+    plt.title(f'{col} vs. Yield')
+    plt.xticks(rotation=45, ha='right')
+
+plt.tight_layout()
+plt.show()
+
+
+
+
+Data preprocessing
+Subtask:
+Prepare the data for modeling, including handling categorical variables and splitting the data into training and testing sets.
+
+
+
+from sklearn.model_selection import train_test_split
+
+categorical_cols = df.select_dtypes(include='object').columns
+df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+
+X = df_encoded.drop('Yield_tons_per_hectare', axis=1)
+y = df_encoded['Yield_tons_per_hectare']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+display(X_train.head())
+display(X_test.head())
+display(y_train.head())
+display(y_test.head())
+
+
+
+
+Model building (xgboost)
+Subtask:
+Build and train an XGBoost Regressor model on the training data.
+
+
+from xgboost import XGBRegressor
+
+xgb_model = XGBRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
+xgb_model.fit(X_train, y_train)
+
+
+
+
+from sklearn.metrics import mean_squared_error, r2_score
+
+y_pred_xgb = xgb_model.predict(X_test)
+
+mse_xgb = mean_squared_error(y_test, y_pred_xgb)
+r2_xgb = r2_score(y_test, y_pred_xgb)
+
+print(f'XGBoost Mean Squared Error: {mse_xgb}')
+print(f'XGBoost R-squared: {r2_xgb}')
+
+
+
+
+
+
+
+
+_________________________________________________________________________________________________________
+
+
+
+
+assignment_04
+
+import kagglehub
+import os
+import matplotlib.pyplot as plt
+from PIL import Image
+import yaml
+import tensorflow as tf
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+
+
+
+
+
+# Download dataset
+path = kagglehub.dataset_download("farukalam/tomato-leaf-diseases-detection-computer-vision")
+print("Path to dataset files:", path)
+
+# Define dataset path
+dataset_path = path
+print(f"Dataset path: {dataset_path}")
+
+# Configuration
+IMG_HEIGHT = 224
+IMG_WIDTH = 224
+BATCH_SIZE = 32
+TRAIN_SPLIT = 0.7
+VAL_SPLIT = 0.15
+TEST_SPLIT = 0.15
+EPOCHS = 5  # Low epochs for quick training
+
+print(f"\nConfiguration:")
+print(f"Image size: {IMG_HEIGHT}x{IMG_WIDTH}")
+print(f"Batch size: {BATCH_SIZE}")
+print(f"Epochs: {EPOCHS}")
+print(f"Splits - Train: {TRAIN_SPLIT}, Val: {VAL_SPLIT}, Test: {TEST_SPLIT}")
+
+# Parse data.yaml for class names
+data_yaml_path = os.path.join(dataset_path, 'data.yaml')
+with open(data_yaml_path, 'r') as f:
+    data_yaml = yaml.safe_load(f)
+true_class_names = data_yaml.get('names', [])
+num_classes = len(true_class_names)
+
+print(f"\nDisease categories ({num_classes}):")
+for class_name in true_class_names:
+    print(f"- {class_name}")
+
+# Collect images and labels
+train_dir = os.path.join(dataset_path, 'train')
+train_img_dir = os.path.join(train_dir, 'images')
+train_label_dir = os.path.join(train_dir, 'labels')
+
+images_by_class = {name: [] for name in true_class_names}
+all_image_files = [f for f in os.listdir(train_img_dir) 
+                   if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp'))]
+
+print(f"\nProcessing {len(all_image_files)} images...")
+
+for img_file in all_image_files:
+    base_name = os.path.splitext(img_file)[0]
+    label_file_name = base_name + '.txt'
+    label_path = os.path.join(train_label_dir, label_file_name)
+    
+    if os.path.exists(label_path):
+        with open(label_path, 'r') as f:
+            labels = f.readlines()
+        
+        if labels:
+            first_label_line = labels[0].strip()
+            parts = first_label_line.split()
+            if parts and parts[0].isdigit():
+                class_idx = int(parts[0])
+                if 0 <= class_idx < len(true_class_names):
+                    class_name = true_class_names[class_idx]
+                    images_by_class[class_name].append(os.path.join(train_img_dir, img_file))
+
+
+
+
+# Count images per class
+print("\nImages per class:")
+for class_name in true_class_names:
+    count = len(images_by_class[class_name])
+    print(f"- {class_name}: {count} images")
+
+# Prepare data
+all_image_paths = []
+all_image_labels = []
+for class_name, image_paths_list in images_by_class.items():
+    class_idx = true_class_names.index(class_name)
+    for img_path in image_paths_list:
+        all_image_paths.append(img_path)
+        all_image_labels.append(class_idx)
+
+print(f"\nTotal images: {len(all_image_paths)}")
+
+# Convert to numpy arrays
+all_image_paths_np = np.array(all_image_paths)
+all_image_labels_np = np.array(all_image_labels)
+
+# Split data
+num_samples = len(all_image_paths_np)
+num_train = int(TRAIN_SPLIT * num_samples)
+num_val = int(VAL_SPLIT * num_samples)
+num_test = num_samples - num_train - num_val
+
+X_temp, X_test, y_temp, y_test = train_test_split(
+    all_image_paths_np, all_image_labels_np, 
+    test_size=num_test, random_state=42, stratify=all_image_labels_np
+)
+
+val_split_from_temp = num_val / len(X_temp)
+X_train, X_val, y_train, y_val = train_test_split(
+    X_temp, y_temp, 
+    test_size=val_split_from_temp, random_state=42, stratify=y_temp
+)
+
+print(f"\nDataset splits:")
+print(f"Training samples: {len(X_train)}")
+print(f"Validation samples: {len(X_val)}")
+print(f"Test samples: {len(X_test)}")
+
+# Preprocessing function
+def preprocess_image(image_path, label):
+    img = tf.io.read_file(image_path)
+    img = tf.image.decode_image(img, channels=3, expand_animations=False)
+    img = tf.image.resize(img, [IMG_HEIGHT, IMG_WIDTH])
+    img = tf.cast(img, tf.float32) / 255.0
+    return img, label
+
+AUTOTUNE = tf.data.AUTOTUNE
+
+# Create datasets
+train_ds = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+val_ds = tf.data.Dataset.from_tensor_slices((X_val, y_val))
+test_ds = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+
+train_ds = train_ds.map(preprocess_image, num_parallel_calls=AUTOTUNE)
+val_ds = val_ds.map(preprocess_image, num_parallel_calls=AUTOTUNE)
+test_ds = test_ds.map(preprocess_image, num_parallel_calls=AUTOTUNE)
+
+# Data augmentation (simple)
+data_augmentation = tf.keras.Sequential([
+    tf.keras.layers.RandomFlip("horizontal"),
+    tf.keras.layers.RandomRotation(0.1),
+], name="data_augmentation")
+
+def augment_train_data(image, label):
+    image = data_augmentation(image)
+    return image, label
+
+train_ds = train_ds.map(augment_train_data, num_parallel_calls=AUTOTUNE)
+train_ds = train_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE)
+val_ds = val_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE)
+test_ds = test_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE)
+
+print("\nDatasets prepared and batched")
+
+
+
+# Build model
+base_model = tf.keras.applications.MobileNetV2(
+    input_shape=(IMG_HEIGHT, IMG_WIDTH, 3),
+    include_top=False,
+    weights='imagenet'
+)
+base_model.trainable = False  # Freeze base model for faster training
+
+model = tf.keras.Sequential([
+    base_model,
+    tf.keras.layers.GlobalAveragePooling2D(),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(0.3),
+    tf.keras.layers.Dense(num_classes, activation='softmax')
+])
+
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+    metrics=['accuracy']
+)
+
+print("\nModel built and compiled")
+model.summary()
+
+# Callbacks
+early_stopping = tf.keras.callbacks.EarlyStopping(
+    monitor='val_loss',
+    patience=3,
+    restore_best_weights=True,
+    verbose=1
+)
+
+model_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+    'best_model_weights.weights.h5',
+    monitor='val_loss',
+    save_best_only=True,
+    save_weights_only=True,
+    verbose=1
+)
+
+# Train model
+print("\n" + "="*50)
+print("Starting training...")
+print("="*50)
+
+history = model.fit(
+    train_ds,
+    epochs=EPOCHS,
+    validation_data=val_ds,
+    callbacks=[early_stopping, model_checkpoint]
+)
+
+print("\nTraining completed!")
+
+# Plot training history
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Loss over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.grid(True)
+
+plt.subplot(1, 2, 2)
+plt.plot(history.history['accuracy'], label='Training Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.title('Accuracy over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+# Load best weights and evaluate
+model.load_weights('best_model_weights.weights.h5')
+print("\nBest model weights loaded")
+
+test_loss, test_accuracy = model.evaluate(test_ds)
+print(f"\nTest Results:")
+print(f"Test Loss: {test_loss:.4f}")
+print(f"Test Accuracy: {test_accuracy:.4f}")
+
+# Get predictions
+predictions = model.predict(test_ds)
+predicted_labels = np.argmax(predictions, axis=1)
+true_labels = np.concatenate([y for x, y in test_ds], axis=0)
+
+
+
+
+
+
+# Classification report
+print("\nClassification Report:")
+print(classification_report(true_labels, predicted_labels, target_names=true_class_names))
+
+# Confusion matrix
+conf_matrix = confusion_matrix(true_labels, predicted_labels)
+plt.figure(figsize=(10, 8))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=true_class_names, yticklabels=true_class_names)
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.title('Confusion Matrix')
+plt.xticks(rotation=45, ha='right')
+plt.yticks(rotation=0)
+plt.tight_layout()
+plt.show()
+
+# Display sample predictions
+test_images = []
+test_labels_raw = []
+for images_batch, labels_batch in test_ds.unbatch().take(100).as_numpy_iterator():
+    test_images.append(images_batch)
+    test_labels_raw.append(labels_batch)
+
+test_images_np = np.array(test_images)
+test_labels_np = np.array(test_labels_raw)
+
+num_display_samples = 10
+random_indices = np.random.choice(len(test_images_np), 
+                                 min(num_display_samples, len(test_images_np)), 
+                                 replace=False)
+
+plt.figure(figsize=(15, 8))
+for i, idx in enumerate(random_indices):
+    image = test_images_np[idx]
+    true_label_idx = test_labels_np[idx]
+    predicted_label_idx = predicted_labels[idx]
+    true_label_name = true_class_names[true_label_idx]
+    predicted_label_name = true_class_names[predicted_label_idx]
+    
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(image)
+    color = "green" if true_label_idx == predicted_label_idx else "red"
+    title_text = f"True: {true_label_name}\nPred: {predicted_label_name}"
+    plt.title(title_text, color=color, fontsize=9)
+    plt.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+print("\n✅ Training and evaluation complete!")
+
+
+
+
+
+
+
+
+
+
+_____________________________________________________________________________
+
+
+assignment_05
+
+
+# Cell 1: Setup and Synthetic Data Generation
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Set plot style
+sns.set_style("whitegrid")
+
+def generate_data(num_samples=100):
+    """Generates a synthetic dataset for agricultural price forecasting."""
+    np.random.seed(42)  # for reproducibility
+    
+    # Generate Date range (Monthly data)
+    dates = pd.date_range(start='2015-01-01', periods=num_samples, freq='M')
+    
+    # Base Price (with an upward trend and some seasonality)
+    base_price = 500 + np.arange(num_samples) * 2 + np.sin(np.arange(num_samples) / 6) * 50
+    
+    # Factors
+    rainfall = np.random.normal(loc=150, scale=30, size=num_samples) # Rainfall in mm
+    production_yield = np.random.normal(loc=1000, scale=100, size=num_samples) # Yield in tons
+    market_demand = np.random.normal(loc=50, scale=10, size=num_samples) # Market demand index
+    
+    # Price is a function of Base Price + Factors + Random Noise
+    # Assume: High Rainfall (good for crop) -> Lower Price (more supply)
+    # Assume: High Production Yield -> Lower Price (more supply)
+    # Assume: High Market Demand -> Higher Price
+    price_noise = np.random.normal(loc=0, scale=15, size=num_samples)
+    final_price = (
+        base_price 
+        - 0.5 * rainfall 
+        - 0.05 * production_yield 
+        + 5 * market_demand 
+        + price_noise
+    )
+    
+    df = pd.DataFrame({
+        'Date': dates,
+        'Rainfall_mm': rainfall.round(2),
+        'Production_Yield_Tons': production_yield.round(2),
+        'Market_Demand_Index': market_demand.round(2),
+        'Product_Price_USD': final_price.round(2)
+    })
+    
+    # Set Date as index for time series analysis
+    df.set_index('Date', inplace=True)
+    return df
+
+df = generate_data()
+print("First 5 rows of the dataset:")
+print(df.head())
+print("\nData Info:")
+df.info()
+
+
+
+# Cell 2: Exploratory Data Analysis (EDA)
+
+def perform_eda(df):
+    """Performs basic EDA on the agricultural price data."""
+    print("## Data Statistics")
+    print(df.describe().T)
+perform_eda(df)
+
+
+
+
+# --- Price Trend over Time ---
+plt.figure(figsize=(12, 5))
+df['Product_Price_USD'].plot(title='Agricultural Product Price Trend Over Time')
+plt.ylabel('Price (USD)')
+plt.xlabel('Date')
+plt.show()
+
+
+
+# --- Distribution of Variables ---
+df.hist(figsize=(10, 8), bins=15)
+plt.suptitle('Distribution of Features', y=1.02)
+plt.tight_layout()
+plt.show()
+
+
+
+
+# --- Correlation Matrix ---
+plt.figure(figsize=(8, 6))
+correlation_matrix = df.corr()
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+plt.title('Feature Correlation Matrix')
+plt.show()
+
+
+
+# --- Relationship with Target Variable (Price) ---
+plt.figure(figsize=(15, 5))
+for i, col in enumerate(['Rainfall_mm', 'Production_Yield_Tons', 'Market_Demand_Index']):
+    plt.subplot(1, 3, i + 1)
+    sns.scatterplot(x=df[col], y=df['Product_Price_USD'])
+    plt.title(f'{col} vs. Price')
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+# Cell 3: Data Preprocessing and Feature Engineering
+
+def preprocess_data(df):
+    """Adds time-based features and handles any time-series specific preprocessing."""
+    
+    # Create time-based features (important for seasonality)
+    # The 'Date' index is used here
+    df['Year'] = df.index.year
+    df['Month'] = df.index.month
+    
+    # Create Lagged Price (Price from the previous month - a common time series feature)
+    df['Price_Lag_1'] = df['Product_Price_USD'].shift(1)
+    
+    # Drop the first row which will have a NaN for the lagged price
+    df.dropna(inplace=True) 
+    
+    print("Features after Preprocessing (first 5 rows):")
+    print(df.head())
+    return df
+
+df_processed = preprocess_data(df.copy())
+
+
+
+
+
+
+# Cell 4: Model Training
+
+def train_forecasting_model(df):
+    """Splits data and trains a Linear Regression model."""
+    
+    # Define features (X) and target (y)
+    # We use all available columns as features, including the new ones
+    features = [col for col in df.columns if col != 'Product_Price_USD']
+    X = df[features]
+    y = df['Product_Price_USD']
+    
+    # Split data into training and testing sets (80% train, 20% test)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, shuffle=False # Use shuffle=False for time-series data
+    )
+    
+    # Initialize and train the Linear Regression model
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    
+    print(f"Features used in the model: {features}")
+    print(f"Training set size: {len(X_train)} samples")
+    print(f"Test set size: {len(X_test)} samples")
+    return model, X_test, y_test
+
+linear_model, X_test, y_test = train_forecasting_model(df_processed)
+
+
+
+
+
+# Cell 5: Model Evaluation and Prediction
+
+def evaluate_and_predict(model, X_test, y_test):
+    """Evaluates the model and makes predictions."""
+    
+    # Make predictions on the test set
+    y_pred = model.predict(X_test)
+    
+    # --- Evaluation Metrics ---
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
+    
+    print("## Model Evaluation Metrics")
+    print(f"Mean Squared Error (MSE): {mse:.2f}")
+    print(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
+    print(f"R-squared (R2): {r2:.4f}")
+    
+    # --- Visualization of Predictions ---
+    results_df = pd.DataFrame({
+        'Actual Price': y_test, 
+        'Predicted Price': y_pred
+    }, index=y_test.index)
+    
+    plt.figure(figsize=(12, 6))
+    plt.plot(results_df['Actual Price'], label='Actual Price', marker='o')
+    plt.plot(results_df['Predicted Price'], label='Predicted Price', linestyle='--', marker='x')
+    plt.title('Agricultural Price: Actual vs. Predicted (Test Set)')
+    plt.xlabel('Date')
+    plt.ylabel('Price (USD)')
+    plt.legend()
+    plt.show()
+
+evaluate_and_predict(linear_model, X_test, y_test)
+
+
+
+
+
+
+
+
+
+
+
+______________________________________________________________________________________________
+assignemenr_6
+
+
+assignment_06
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+
+# --- START OF CELL 1: DATA GENERATION, SAVING, LOADING, AND EDA ---
+def generate_synthetic_data(num_samples=1000, filepath='irrigation_data.csv'):
+    """
+    Generates a synthetic dataset for irrigation analysis and saves it to a CSV.
+    
+    The crop yield is modeled to be optimal when soil moisture is high and
+    irrigation duration is moderate (not too short, not excessive).
+    """
+    print("Generating synthetic data...")
+    
+    # Independent variables
+    # Soil Moisture (VWC percentage): 20% (dry) to 80% (saturated)
+    soil_moisture = np.random.uniform(20, 80, num_samples)
+    
+    # Temperature (Celsius): Avg 25, Std 5
+    temperature = np.random.normal(25, 5, num_samples)
+    
+    # Irrigation Duration (hours): 1 to 10
+    irrigation_duration = np.random.uniform(1, 10, num_samples)
+    
+    # Water Usage (liters): Depends mostly on duration and slightly on temperature
+    water_usage = (irrigation_duration * 50) + (temperature * 2) + np.random.normal(0, 50, num_samples)
+    water_usage = np.clip(water_usage, 50, 600) # Ensure realistic range
+    
+    # Crop Yield (units/hectare): Modeled based on moisture and optimal duration (~4-6 hrs)
+    # Yield is penalized for very low/very high duration and very low moisture
+    optimal_duration = 5  # Example: 5 hours is ideal
+    duration_penalty = (irrigation_duration - optimal_duration)**2 * 5
+    moisture_benefit = (soil_moisture - 20) * 4 # Minimum moisture is 20
+    
+    crop_yield = 500 + moisture_benefit - duration_penalty + np.random.normal(0, 50, num_samples)
+    crop_yield = np.clip(crop_yield, 100, 1500) # Ensure realistic range
+    
+    data = pd.DataFrame({
+        'Soil_Moisture_Pct': soil_moisture,
+        'Temperature_C': temperature,
+        'Irrigation_Duration_Hours': irrigation_duration,
+        'Water_Usage_Liters': water_usage,
+        'Crop_Yield_Units': crop_yield
+    })
+    
+    # Save to CSV
+    data.to_csv(filepath, index=False)
+    print(f"Data saved to {filepath}. Total samples: {num_samples}")
+    return data
+
+def load_data(filepath='irrigation_data.csv'):
+    """Loads the dataset from the CSV file."""
+    try:
+        df = pd.read_csv(filepath)
+        print(f"\nData successfully loaded from {filepath}.")
+        return df
+    except FileNotFoundError:
+        print(f"\nError: File {filepath} not found.")
+        return None
+
+def perform_eda(df):
+    """Performs and prints basic Exploratory Data Analysis (EDA)."""
+    if df is None:
+        return
+    
+    print("\n--- EDA RESULTS ---")
+    
+    # 1. Dataset Information
+    print("\n1. Data Info:")
+    df.info()
+    
+    # 2. Descriptive Statistics
+    print("\n2. Descriptive Statistics:")
+    print(df.describe().T)
+    
+    # 3. Missing Values Check
+    print("\n3. Missing Values:")
+    print(df.isnull().sum())
+    
+    # 4. Correlation Analysis
+    print("\n4. Correlation Matrix (Target Variables):")
+    correlation = df[['Soil_Moisture_Pct', 'Water_Usage_Liters', 'Crop_Yield_Units']].corr()
+    print(correlation)
+    
+    # 5. Visual EDA (simple plots)
+    print("\n5. Generating Visualizations...")
+    
+    plt.style.use('seaborn-v0_8-whitegrid')
+    
+    # Scatter Plot: Water Usage vs. Crop Yield
+    plt.figure(figsize=(10, 5))
+    
+    plt.subplot(1, 2, 1)
+    sns.scatterplot(x='Water_Usage_Liters', y='Crop_Yield_Units', data=df, alpha=0.6, color='darkgreen')
+    plt.title('Water Usage vs. Crop Yield')
+    plt.xlabel('Water Usage (Liters)')
+    plt.ylabel('Crop Yield (Units)')
+    
+    # Scatter Plot: Soil Moisture vs. Crop Yield
+    plt.subplot(1, 2, 2)
+    sns.scatterplot(x='Soil_Moisture_Pct', y='Crop_Yield_Units', data=df, alpha=0.6, color='blue')
+    plt.title('Soil Moisture vs. Crop Yield')
+    plt.xlabel('Soil Moisture (%)')
+    plt.ylabel('Crop Yield (Units)')
+    
+    plt.tight_layout()
+    plt.show()
+
+# --- END OF CELL 1 EXECUTION ---
+
+# --- START OF CELL 2: DATA PREPROCESSING AND FEATURE ENGINEERING ---
+
+def preprocess_data(df):
+    """
+    Performs minimal preprocessing (e.g., standardizing column names, dropping duplicates).
+    For this simple model, we skip complex scaling/encoding.
+    """
+    if df is None:
+        return None
+    
+    print("\n--- Preprocessing Data ---")
+    
+    # Drop any duplicate rows
+    df.drop_duplicates(inplace=True)
+    print(f"Data shape after removing duplicates: {df.shape}")
+    
+    # Convert temperature to a more appropriate type if needed (already float)
+    
+    return df
+
+def feature_engineer(df):
+    """
+    Creates a new feature representing water efficiency.
+    """
+    if df is None:
+        return None
+        
+    print("\n--- Feature Engineering ---")
+    
+    # Create Water Efficiency (Yield per unit of water used)
+    # Added a small epsilon to avoid division by zero, though unlikely here
+    df['Water_Efficiency'] = df['Crop_Yield_Units'] / (df['Water_Usage_Liters'] + 1e-6)
+    
+    print("New feature 'Water_Efficiency' (Crop Yield / Water Usage) created.")
+    print(df[['Crop_Yield_Units', 'Water_Usage_Liters', 'Water_Efficiency']].head())
+    
+    # Visualize the new feature's relationship with irrigation duration
+    plt.figure(figsize=(8, 5))
+    sns.scatterplot(x='Irrigation_Duration_Hours', y='Water_Efficiency', data=df, alpha=0.6, color='purple')
+    plt.title('Irrigation Duration vs. Water Efficiency')
+    plt.xlabel('Irrigation Duration (Hours)')
+    plt.ylabel('Water Efficiency (Yield/Liter)')
+    plt.show()
+    
+    return df
+
+# --- END OF CELL 2 EXECUTION ---
+
+# --- START OF CELL 3: OPTIMIZATION MODEL AND SUGGESTIONS ---
+
+def train_optimization_model(df):
+    """
+    Trains a Linear Regression model to predict Crop Yield based on key factors.
+    """
+    if df is None:
+        print("Cannot train model: DataFrame is empty.")
+        return None, None
+
+    print("\n--- Training Optimization Model (Linear Regression) ---")
+    
+    # Features (X): Factors that influence yield
+    X = df[['Soil_Moisture_Pct', 'Temperature_C', 'Irrigation_Duration_Hours']]
+    # Target (y): The variable we want to maximize
+    y = df['Crop_Yield_Units']
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Initialize and train the model
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    
+    # Evaluate the model
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    
+    print(f"Model trained successfully.")
+    print(f"Mean Squared Error on Test Set: {mse:.2f}")
+    print("\nModel Coefficients:")
+    for feature, coef in zip(X.columns, model.coef_):
+        print(f"- {feature}: {coef:.2f}")
+        
+    return model, X.columns.tolist()
+
+def suggest_optimal_irrigation(model, features, current_moisture, current_temp, max_duration=10):
+    """
+    Uses the trained model to find the irrigation duration that maximizes predicted yield.
+    """
+    if model is None:
+        print("\nOptimization model not available.")
+        return None
+        
+    print(f"\n--- Suggesting Optimal Irrigation Duration ---")
+    print(f"Current Conditions: Soil Moisture={current_moisture}%, Temperature={current_temp}°C")
+    
+    best_yield = -1
+    optimal_duration = 0
+    
+    # Iterate through possible irrigation durations (1 to max_duration hours)
+    duration_options = np.linspace(1, max_duration, 50) # 50 discrete tests
+    
+    for duration in duration_options:
+        # Create a sample input matching the model's feature order
+        input_data = pd.DataFrame([[current_moisture, current_temp, duration]], columns=features)
+        
+        # Predict the yield
+        predicted_yield = model.predict(input_data)[0]
+        
+        if predicted_yield > best_yield:
+            best_yield = predicted_yield
+            optimal_duration = duration
+            
+    print(f"\nBased on the model, the predicted optimal duration is:")
+    print(f"-> {optimal_duration:.1f} hours, which is predicted to result in a yield of {best_yield:.0f} units.")
+    print("\n*Note: This suggestion is based on the relationships learned from the synthetic data.")
+    return optimal_duration
+
+# --- MAIN EXECUTION BLOCK ---
+
+if __name__ == '__main__':
+    # Initialize variables for file name
+    data_file = 'irrigation_data.csv'
+    
+
+
+# ==========================================================
+# 🚀 CELL 1: DATA GENERATION, LOADING, AND INITIAL EDA
+# ==========================================================
+
+# 1. Generate and save data
+df_generated = generate_synthetic_data(filepath=data_file)
+
+# 2. Load the data (to simulate starting fresh from the CSV)
+df = load_data(filepath=data_file)
+
+# 3. Perform EDA
+perform_eda(df)
+
+
+
+
+# ==========================================================
+# 🛠️ CELL 2: DATA PREPROCESSING AND FEATURE ENGINEERING
+# ==========================================================
+
+# 1. Preprocess
+df_processed = preprocess_data(df)
+
+
+# 2. Feature Engineering
+df_featured = feature_engineer(df_processed)
+
+
+
+# ==========================================================
+# 🧠 CELL 3: OPTIMIZATION MODEL AND SUGGESTIONS
+# ==========================================================
+
+# 1. Train the model
+model, features = train_optimization_model(df_featured)
+
+
+
+
+# 2. Use the model to suggest optimal irrigation for a test case
+if model:
+    # Test Case 1: Slightly dry, normal temperature
+    suggest_optimal_irrigation(
+        model=model, 
+        features=features, 
+        current_moisture=45, 
+        current_temp=24
+    )
+    
+    # Test Case 2: Very high moisture, normal temperature (Model should suggest low duration)
+    suggest_optimal_irrigation(
+        model=model, 
+        features=features, 
+        current_moisture=75, 
+        current_temp=25
+    )
+
+# Ensure all plots are displayed when the script runs in an interactive environment.
+# When run as a script, plt.show() calls will handle display.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
