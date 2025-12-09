@@ -1,0 +1,313 @@
+!pip install statsmodels
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.stattools import adfuller
+from sklearn.metrics import mean_squared_error
+import warnings
+
+
+
+
+
+
+
+
+# Suppress harmless warnings for cleaner output
+warnings.filterwarnings("ignore")
+
+def generate_synthetic_data(start_date, periods, freq='D'):
+    """
+    Generates a synthetic daily temperature time series.
+    The data simulates a seasonal trend with some randomness.
+    """
+    np.random.seed(42)
+    
+    # Create a date range
+    dates = pd.date_range(start=start_date, periods=periods, freq=freq)
+    
+    # Simulate a base temperature (e.g., 25 degrees C)
+    base_temp = 25
+    
+    # Add a strong seasonal component (sine wave for yearly cycle)
+    # The amplitude is 5, and the frequency is based on 365.25 days
+    seasonal_component = 5 * np.sin(2 * np.pi * dates.dayofyear / 365.25)
+    
+    # Add a weak trend component (slight heating over time)
+    trend_component = 0.01 * np.arange(periods)
+    
+    # Add random noise
+    noise = np.random.normal(0, 1.5, periods)
+    
+    # Calculate final temperature
+    temperature = base_temp + seasonal_component + trend_component + noise
+    
+    # Create the DataFrame
+    df = pd.DataFrame({'Temperature': temperature}, index=dates)
+    return df
+
+# Parameters for data generation
+START_DATE = '2020-01-01'
+PERIODS = 1000 # ~2.7 years of daily data
+PREDICTION_STEPS = 90 # Predict 90 days into the future
+
+# Execute data generation
+df_weather = generate_synthetic_data(START_DATE, PERIODS)
+
+print("--- Data Generation Complete ---")
+print(f"Dataset Shape: {df_weather.shape}")
+print("First 5 entries:")
+print(df_weather.head())
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 2: Exploratory Data Analysis (EDA) and Visualization
+# ==============================================================================
+
+def visualize_time_series(df, series_name):
+    """Visualizes the time series data."""
+    plt.figure(figsize=(12, 6))
+    plt.plot(df.index, df[series_name], label=series_name)
+    plt.title(f'Historical {series_name} Over Time')
+    plt.xlabel('Date')
+    plt.ylabel(series_name)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend()
+    plt.show()
+
+# Execute visualization
+visualize_time_series(df_weather, 'Temperature')
+print("--- Visualization Complete ---")
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 3: Stationarity Check (ADF Test)
+# ==============================================================================
+
+def check_stationarity(series):
+    """
+    Performs the Augmented Dickey-Fuller (ADF) test to check for stationarity.
+    A p-value below 0.05 suggests the data is stationary.
+    """
+    print("--- Running Augmented Dickey-Fuller Test ---")
+    result = adfuller(series.dropna(), autolag='AIC')
+    
+    print('ADF Statistic: %f' % result[0])
+    print('p-value: %f' % result[1])
+    print('Critical Values:')
+    for key, value in result[4].items():
+        print('\t%s: %.3f' % (key, value))
+
+    if result[1] <= 0.05:
+        print("\nConclusion: The time series is likely Stationary (p-value <= 0.05).")
+        # D (differencing order) = 0 is a good starting point for ARIMA
+        return 0
+    else:
+        print("\nConclusion: The time series is likely Non-Stationary (p-value > 0.05).")
+        # If non-stationary, we would typically difference the data and re-test.
+        # For simplicity, we assume d=1 if non-stationary and skip further differencing here.
+        return 1
+
+# Execute stationarity check and determine differencing order (d)
+d_order = check_stationarity(df_weather['Temperature'])
+print(f"\nDetermined differencing order (d) for ARIMA: {d_order}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 4: Model Training (ARIMA)
+# ==============================================================================
+
+# Split data into training and testing sets (use last 180 days for test)
+TRAIN_SIZE = PERIODS - 180
+df_train = df_weather[:TRAIN_SIZE]
+df_test = df_weather[TRAIN_SIZE:]
+
+def train_arima_model(train_data, order):
+    """
+    Trains an ARIMA model on the provided time series data.
+    Order is a tuple (p, d, q).
+    """
+    print(f"\n--- Training ARIMA Model with order={order} ---")
+    
+    # Initialize and fit the ARIMA model
+    # We use a simple (5, d, 0) non-seasonal order as a starting point.
+    # p=5 (AutoRegressive): Uses 5 previous time steps.
+    # d=d_order (Integrated): Differencing term from stationarity check.
+    # q=0 (Moving Average): Using no Moving Average term initially.
+    
+    model = ARIMA(train_data, order=order)
+    model_fit = model.fit()
+    
+    print(model_fit.summary())
+    return model_fit
+
+# Set model order (p, d, q)
+arima_order = (5, d_order, 0)
+
+# Execute model training
+arima_model = train_arima_model(df_train['Temperature'], arima_order)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ # ==============================================================================
+# CELL 5: Forecasting and Evaluation (FIX APPLIED HERE)
+# ==============================================================================
+
+def evaluate_and_forecast(model_fit, train_data, test_data, series_name, steps):
+    """
+    Generates in-sample predictions, measures performance on test data, 
+    and forecasts future values.
+    """
+    
+    # 1. In-sample Prediction (against test data for evaluation)
+    # Start prediction from the first test index to the end of the test set
+    start_idx = test_data.index[0]
+    end_idx = test_data.index[-1]
+    
+    predictions_test = model_fit.predict(start=start_idx, end=end_idx, dynamic=False)
+    
+    # Calculate RMSE on test set
+    # FIX: Since test_data is passed as a Series (df_test['Temperature']), 
+    # we use test_data directly instead of test_data[series_name]
+    rmse = np.sqrt(mean_squared_error(test_data, predictions_test)) # <-- FIX IS HERE
+    print(f"\nRoot Mean Squared Error (RMSE) on Test Data: {rmse:.2f}")
+
+    # 2. Future Forecasting
+    
+    # Determine the start date for the forecast (day after the last day of the full data)
+    forecast_start_date = train_data.index[-1] + pd.Timedelta(days=1)
+    
+    # Predict N steps into the future, starting from the end of the full dataset
+    forecast_result = model_fit.get_forecast(steps=steps)
+    
+    forecast_values = forecast_result.predicted_mean
+    confidence_intervals = forecast_result.conf_int()
+    
+    # Create a DataFrame for the forecast
+    forecast_index = pd.date_range(start=forecast_start_date, periods=steps)
+    df_forecast = pd.DataFrame({
+        'Predicted': forecast_values.values,
+        'Lower Bound (95%)': confidence_intervals.iloc[:, 0].values,
+        'Upper Bound (95%)': confidence_intervals.iloc[:, 1].values,
+    }, index=forecast_index)
+
+    return predictions_test, df_forecast
+
+# Execute forecasting and evaluation
+predictions_test, df_future_forecast = evaluate_and_forecast(
+    arima_model, 
+    df_train['Temperature'], 
+    df_test['Temperature'], 
+    'Temperature', 
+    PREDICTION_STEPS
+)
+
+print("\n--- Future Forecast Complete ---")
+print(f"Forecast for the next {PREDICTION_STEPS} days:")
+print(df_future_forecast.head(5))
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CELL 6: Final Visualization of Results
+# ==============================================================================
+# (Rest of the code remains the same, including the fix in the previous response)
+def plot_forecast(df_full, df_test, predictions_test, df_forecast, series_name):
+    """Plots the historical data, test predictions, and future forecast."""
+    
+    plt.figure(figsize=(14, 8))
+    
+    # 1. Plot Historical Data (Training + Actual Test Data)
+    # Plotting the entire historical series for continuity
+    plt.plot(df_full.index, df_full[series_name], label='Historical Data (Train + Test Actual)', color='skyblue')
+    
+    # 2. Plot Test Data (Actual values) 
+    # plt.plot(df_test.index, df_test[series_name], label='Actual Test Data', color='darkorange', alpha=0.7) # This line is often redundant
+    
+    # 3. Plot Test Predictions
+    plt.plot(predictions_test.index, predictions_test, label='Test Predictions', color='firebrick', linestyle='--')
+    
+    # 4. Plot Future Forecast
+    plt.plot(df_forecast.index, df_forecast['Predicted'], label='Future Forecast', color='green', linewidth=2)
+    
+    # 5. Plot Confidence Interval (shaded area)
+    plt.fill_between(
+        df_forecast.index,
+        df_forecast['Lower Bound (95%)'],
+        df_forecast['Upper Bound (95%)'],
+        color='lightgreen',
+        alpha=0.3,
+        label='95% Confidence Interval'
+    )
+    
+    plt.title(f'ARIMA Model: {series_name} Forecast vs. Actual')
+    plt.xlabel('Date')
+    plt.ylabel(series_name)
+    # Draw a vertical line at the start of the test period
+    plt.axvline(df_test.index[0], color='gray', linestyle=':', label='Start of Test Period / Forecast Horizon')
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.show()
+
+# Execute final visualization - FIX FROM PREVIOUS TURN: pass the full df_weather
+plot_forecast(df_weather, df_test, predictions_test, df_future_forecast, 'Temperature')
+print("--- Final Visualization Complete ---")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,303 @@
+assignment_06
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+
+# --- START OF CELL 1: DATA GENERATION, SAVING, LOADING, AND EDA ---
+def generate_synthetic_data(num_samples=1000, filepath='irrigation_data.csv'):
+    """
+    Generates a synthetic dataset for irrigation analysis and saves it to a CSV.
+    
+    The crop yield is modeled to be optimal when soil moisture is high and
+    irrigation duration is moderate (not too short, not excessive).
+    """
+    print("Generating synthetic data...")
+    
+    # Independent variables
+    # Soil Moisture (VWC percentage): 20% (dry) to 80% (saturated)
+    soil_moisture = np.random.uniform(20, 80, num_samples)
+    
+    # Temperature (Celsius): Avg 25, Std 5
+    temperature = np.random.normal(25, 5, num_samples)
+    
+    # Irrigation Duration (hours): 1 to 10
+    irrigation_duration = np.random.uniform(1, 10, num_samples)
+    
+    # Water Usage (liters): Depends mostly on duration and slightly on temperature
+    water_usage = (irrigation_duration * 50) + (temperature * 2) + np.random.normal(0, 50, num_samples)
+    water_usage = np.clip(water_usage, 50, 600) # Ensure realistic range
+    
+    # Crop Yield (units/hectare): Modeled based on moisture and optimal duration (~4-6 hrs)
+    # Yield is penalized for very low/very high duration and very low moisture
+    optimal_duration = 5  # Example: 5 hours is ideal
+    duration_penalty = (irrigation_duration - optimal_duration)**2 * 5
+    moisture_benefit = (soil_moisture - 20) * 4 # Minimum moisture is 20
+    
+    crop_yield = 500 + moisture_benefit - duration_penalty + np.random.normal(0, 50, num_samples)
+    crop_yield = np.clip(crop_yield, 100, 1500) # Ensure realistic range
+    
+    data = pd.DataFrame({
+        'Soil_Moisture_Pct': soil_moisture,
+        'Temperature_C': temperature,
+        'Irrigation_Duration_Hours': irrigation_duration,
+        'Water_Usage_Liters': water_usage,
+        'Crop_Yield_Units': crop_yield
+    })
+    
+    # Save to CSV
+    data.to_csv(filepath, index=False)
+    print(f"Data saved to {filepath}. Total samples: {num_samples}")
+    return data
+
+def load_data(filepath='irrigation_data.csv'):
+    """Loads the dataset from the CSV file."""
+    try:
+        df = pd.read_csv(filepath)
+        print(f"\nData successfully loaded from {filepath}.")
+        return df
+    except FileNotFoundError:
+        print(f"\nError: File {filepath} not found.")
+        return None
+
+def perform_eda(df):
+    """Performs and prints basic Exploratory Data Analysis (EDA)."""
+    if df is None:
+        return
+    
+    print("\n--- EDA RESULTS ---")
+    
+    # 1. Dataset Information
+    print("\n1. Data Info:")
+    df.info()
+    
+    # 2. Descriptive Statistics
+    print("\n2. Descriptive Statistics:")
+    print(df.describe().T)
+    
+    # 3. Missing Values Check
+    print("\n3. Missing Values:")
+    print(df.isnull().sum())
+    
+    # 4. Correlation Analysis
+    print("\n4. Correlation Matrix (Target Variables):")
+    correlation = df[['Soil_Moisture_Pct', 'Water_Usage_Liters', 'Crop_Yield_Units']].corr()
+    print(correlation)
+    
+    # 5. Visual EDA (simple plots)
+    print("\n5. Generating Visualizations...")
+    
+    plt.style.use('seaborn-v0_8-whitegrid')
+    
+    # Scatter Plot: Water Usage vs. Crop Yield
+    plt.figure(figsize=(10, 5))
+    
+    plt.subplot(1, 2, 1)
+    sns.scatterplot(x='Water_Usage_Liters', y='Crop_Yield_Units', data=df, alpha=0.6, color='darkgreen')
+    plt.title('Water Usage vs. Crop Yield')
+    plt.xlabel('Water Usage (Liters)')
+    plt.ylabel('Crop Yield (Units)')
+    
+    # Scatter Plot: Soil Moisture vs. Crop Yield
+    plt.subplot(1, 2, 2)
+    sns.scatterplot(x='Soil_Moisture_Pct', y='Crop_Yield_Units', data=df, alpha=0.6, color='blue')
+    plt.title('Soil Moisture vs. Crop Yield')
+    plt.xlabel('Soil Moisture (%)')
+    plt.ylabel('Crop Yield (Units)')
+    
+    plt.tight_layout()
+    plt.show()
+
+# --- END OF CELL 1 EXECUTION ---
+
+# --- START OF CELL 2: DATA PREPROCESSING AND FEATURE ENGINEERING ---
+
+def preprocess_data(df):
+    """
+    Performs minimal preprocessing (e.g., standardizing column names, dropping duplicates).
+    For this simple model, we skip complex scaling/encoding.
+    """
+    if df is None:
+        return None
+    
+    print("\n--- Preprocessing Data ---")
+    
+    # Drop any duplicate rows
+    df.drop_duplicates(inplace=True)
+    print(f"Data shape after removing duplicates: {df.shape}")
+    
+    # Convert temperature to a more appropriate type if needed (already float)
+    
+    return df
+
+def feature_engineer(df):
+    """
+    Creates a new feature representing water efficiency.
+    """
+    if df is None:
+        return None
+        
+    print("\n--- Feature Engineering ---")
+    
+    # Create Water Efficiency (Yield per unit of water used)
+    # Added a small epsilon to avoid division by zero, though unlikely here
+    df['Water_Efficiency'] = df['Crop_Yield_Units'] / (df['Water_Usage_Liters'] + 1e-6)
+    
+    print("New feature 'Water_Efficiency' (Crop Yield / Water Usage) created.")
+    print(df[['Crop_Yield_Units', 'Water_Usage_Liters', 'Water_Efficiency']].head())
+    
+    # Visualize the new feature's relationship with irrigation duration
+    plt.figure(figsize=(8, 5))
+    sns.scatterplot(x='Irrigation_Duration_Hours', y='Water_Efficiency', data=df, alpha=0.6, color='purple')
+    plt.title('Irrigation Duration vs. Water Efficiency')
+    plt.xlabel('Irrigation Duration (Hours)')
+    plt.ylabel('Water Efficiency (Yield/Liter)')
+    plt.show()
+    
+    return df
+
+# --- END OF CELL 2 EXECUTION ---
+
+# --- START OF CELL 3: OPTIMIZATION MODEL AND SUGGESTIONS ---
+
+def train_optimization_model(df):
+    """
+    Trains a Linear Regression model to predict Crop Yield based on key factors.
+    """
+    if df is None:
+        print("Cannot train model: DataFrame is empty.")
+        return None, None
+
+    print("\n--- Training Optimization Model (Linear Regression) ---")
+    
+    # Features (X): Factors that influence yield
+    X = df[['Soil_Moisture_Pct', 'Temperature_C', 'Irrigation_Duration_Hours']]
+    # Target (y): The variable we want to maximize
+    y = df['Crop_Yield_Units']
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Initialize and train the model
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    
+    # Evaluate the model
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    
+    print(f"Model trained successfully.")
+    print(f"Mean Squared Error on Test Set: {mse:.2f}")
+    print("\nModel Coefficients:")
+    for feature, coef in zip(X.columns, model.coef_):
+        print(f"- {feature}: {coef:.2f}")
+        
+    return model, X.columns.tolist()
+
+def suggest_optimal_irrigation(model, features, current_moisture, current_temp, max_duration=10):
+    """
+    Uses the trained model to find the irrigation duration that maximizes predicted yield.
+    """
+    if model is None:
+        print("\nOptimization model not available.")
+        return None
+        
+    print(f"\n--- Suggesting Optimal Irrigation Duration ---")
+    print(f"Current Conditions: Soil Moisture={current_moisture}%, Temperature={current_temp}°C")
+    
+    best_yield = -1
+    optimal_duration = 0
+    
+    # Iterate through possible irrigation durations (1 to max_duration hours)
+    duration_options = np.linspace(1, max_duration, 50) # 50 discrete tests
+    
+    for duration in duration_options:
+        # Create a sample input matching the model's feature order
+        input_data = pd.DataFrame([[current_moisture, current_temp, duration]], columns=features)
+        
+        # Predict the yield
+        predicted_yield = model.predict(input_data)[0]
+        
+        if predicted_yield > best_yield:
+            best_yield = predicted_yield
+            optimal_duration = duration
+            
+    print(f"\nBased on the model, the predicted optimal duration is:")
+    print(f"-> {optimal_duration:.1f} hours, which is predicted to result in a yield of {best_yield:.0f} units.")
+    print("\n*Note: This suggestion is based on the relationships learned from the synthetic data.")
+    return optimal_duration
+
+# --- MAIN EXECUTION BLOCK ---
+
+if __name__ == '__main__':
+    # Initialize variables for file name
+    data_file = 'irrigation_data.csv'
+    
+
+
+# ==========================================================
+# 🚀 CELL 1: DATA GENERATION, LOADING, AND INITIAL EDA
+# ==========================================================
+
+# 1. Generate and save data
+df_generated = generate_synthetic_data(filepath=data_file)
+
+# 2. Load the data (to simulate starting fresh from the CSV)
+df = load_data(filepath=data_file)
+
+# 3. Perform EDA
+perform_eda(df)
+
+
+
+
+# ==========================================================
+# 🛠️ CELL 2: DATA PREPROCESSING AND FEATURE ENGINEERING
+# ==========================================================
+
+# 1. Preprocess
+df_processed = preprocess_data(df)
+
+
+# 2. Feature Engineering
+df_featured = feature_engineer(df_processed)
+
+
+
+# ==========================================================
+# 🧠 CELL 3: OPTIMIZATION MODEL AND SUGGESTIONS
+# ==========================================================
+
+# 1. Train the model
+model, features = train_optimization_model(df_featured)
+
+
+
+
+# 2. Use the model to suggest optimal irrigation for a test case
+if model:
+    # Test Case 1: Slightly dry, normal temperature
+    suggest_optimal_irrigation(
+        model=model, 
+        features=features, 
+        current_moisture=45, 
+        current_temp=24
+    )
+    
+    # Test Case 2: Very high moisture, normal temperature (Model should suggest low duration)
+    suggest_optimal_irrigation(
+        model=model, 
+        features=features, 
+        current_moisture=75, 
+        current_temp=25
+    )
+
+# Ensure all plots are displayed when the script runs in an interactive environment.
+# When run as a script, plt.show() calls will handle display.
+
+
+

@@ -1,0 +1,728 @@
+# Cell 1: Import Required Libraries
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
+
+print("All libraries imported successfully!")
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 2: Scrape Weather Data (using Open-Meteo API as example)
+# ============================================================================
+
+def scrape_weather_data(latitude=40.7128, longitude=-74.0060, days=30):
+    """
+    Scrape weather data for agricultural analysis
+    Parameters: latitude, longitude, days (historical days)
+    Returns: DataFrame with weather data
+    """
+    # Calculate date range
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Open-Meteo API (free, no key required)
+    url = f"https://api.open-meteo.com/v1/forecast"
+    params = {
+        'latitude': latitude,
+        'longitude': longitude,
+        'start_date': start_date.strftime('%Y-%m-%d'),
+        'end_date': end_date.strftime('%Y-%m-%d'),
+        'daily': 'temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max',
+        'timezone': 'auto'
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        
+        # Create DataFrame
+        weather_df = pd.DataFrame({
+            'date': data['daily']['time'],
+            'temp_max': data['daily']['temperature_2m_max'],
+            'temp_min': data['daily']['temperature_2m_min'],
+            'precipitation': data['daily']['precipitation_sum'],
+            'wind_speed': data['daily']['windspeed_10m_max']
+        })
+        
+        weather_df['date'] = pd.to_datetime(weather_df['date'])
+        weather_df['temp_avg'] = (weather_df['temp_max'] + weather_df['temp_min']) / 2
+        
+        print(f"Weather data scraped successfully! Shape: {weather_df.shape}")
+        return weather_df
+    
+    except Exception as e:
+        print(f"Error scraping weather data: {e}")
+        return None
+
+# Execute the function
+weather_data = scrape_weather_data(latitude=40.7128, longitude=-74.0060, days=30)
+print("\nWeather Data Sample:")
+print(weather_data.head())
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 3: Generate Synthetic Soil Data (Since real soil APIs need authentication)
+# ============================================================================
+
+def generate_soil_data(num_samples=100):
+    """
+    Generate synthetic soil data for demonstration
+    In production, you'd scrape from soil databases or agricultural APIs
+    """
+    np.random.seed(42)
+    
+    soil_data = pd.DataFrame({
+        'sample_id': range(1, num_samples + 1),
+        'ph_level': np.random.normal(6.5, 0.8, num_samples),
+        'nitrogen_ppm': np.random.normal(45, 10, num_samples),
+        'phosphorus_ppm': np.random.normal(30, 8, num_samples),
+        'potassium_ppm': np.random.normal(120, 20, num_samples),
+        'organic_matter_%': np.random.normal(3.5, 0.7, num_samples),
+        'moisture_%': np.random.normal(25, 5, num_samples),
+        'soil_type': np.random.choice(['Clay', 'Loam', 'Sandy', 'Silt'], num_samples)
+    })
+    
+    print(f"Soil data generated successfully! Shape: {soil_data.shape}")
+    return soil_data
+
+# Execute the function
+soil_data = generate_soil_data(num_samples=100)
+print("\nSoil Data Sample:")
+print(soil_data.head())
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 4: Generate Synthetic Crop Yield Data
+# ============================================================================
+
+def generate_crop_yield_data(num_records=150):
+    """
+    Generate synthetic crop yield data
+    In production, you'd scrape from agricultural databases
+    """
+    np.random.seed(42)
+    
+    crops = ['Wheat', 'Rice', 'Corn', 'Soybean', 'Barley']
+    regions = ['North', 'South', 'East', 'West', 'Central']
+    years = [2020, 2021, 2022, 2023, 2024]
+    
+    crop_data = pd.DataFrame({
+        'crop_type': np.random.choice(crops, num_records),
+        'region': np.random.choice(regions, num_records),
+        'year': np.random.choice(years, num_records),
+        'area_hectares': np.random.uniform(50, 500, num_records),
+        'yield_tons': np.random.uniform(2, 8, num_records),
+        'rainfall_mm': np.random.uniform(400, 1200, num_records),
+        'temperature_avg': np.random.uniform(15, 30, num_records),
+        'fertilizer_kg': np.random.uniform(100, 400, num_records)
+    })
+    
+    # Calculate yield per hectare
+    crop_data['yield_per_hectare'] = crop_data['yield_tons'] / crop_data['area_hectares']
+    
+    print(f"Crop yield data generated successfully! Shape: {crop_data.shape}")
+    return crop_data
+
+# Execute the function
+crop_yield_data = generate_crop_yield_data(num_records=150)
+print("\nCrop Yield Data Sample:")
+print(crop_yield_data.head())
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 5: Data Cleaning - Handle Missing Values
+# ============================================================================
+
+def clean_missing_values(df, strategy='mean'):
+    """
+    Handle missing values in the dataset
+    Strategies: 'mean', 'median', 'mode', 'drop'
+    """
+    print(f"\nOriginal DataFrame shape: {df.shape}")
+    print(f"Missing values before cleaning:\n{df.isnull().sum()}")
+    
+    df_cleaned = df.copy()
+    
+    # Introduce some missing values for demonstration
+    for col in df_cleaned.select_dtypes(include=[np.number]).columns[:3]:
+        mask = np.random.random(len(df_cleaned)) < 0.05
+        df_cleaned.loc[mask, col] = np.nan
+    
+    print(f"\nMissing values after introducing NaNs:\n{df_cleaned.isnull().sum()}")
+    
+    # Handle numeric columns
+    numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
+    
+    if strategy == 'mean':
+        df_cleaned[numeric_cols] = df_cleaned[numeric_cols].fillna(df_cleaned[numeric_cols].mean())
+    elif strategy == 'median':
+        df_cleaned[numeric_cols] = df_cleaned[numeric_cols].fillna(df_cleaned[numeric_cols].median())
+    elif strategy == 'drop':
+        df_cleaned = df_cleaned.dropna()
+    
+    # Handle categorical columns with mode
+    categorical_cols = df_cleaned.select_dtypes(include=['object']).columns
+    for col in categorical_cols:
+        if df_cleaned[col].isnull().any():
+            df_cleaned[col].fillna(df_cleaned[col].mode()[0], inplace=True)
+    
+    print(f"\nMissing values after cleaning:\n{df_cleaned.isnull().sum()}")
+    print(f"Cleaned DataFrame shape: {df_cleaned.shape}")
+    
+    return df_cleaned
+
+# Clean the crop yield data
+crop_yield_clean = clean_missing_values(crop_yield_data, strategy='mean')
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 6: Data Cleaning - Handle Outliers
+# ============================================================================
+
+def detect_and_handle_outliers(df, columns, method='iqr', action='cap'):
+    """
+    Detect and handle outliers using IQR or Z-score method
+    Actions: 'cap' (winsorize), 'remove', 'flag'
+    """
+    df_cleaned = df.copy()
+    outlier_info = {}
+    
+    for col in columns:
+        if col not in df_cleaned.columns:
+            continue
+            
+        if method == 'iqr':
+            Q1 = df_cleaned[col].quantile(0.25)
+            Q3 = df_cleaned[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            outliers = ((df_cleaned[col] < lower_bound) | (df_cleaned[col] > upper_bound))
+            outlier_count = outliers.sum()
+            
+            if action == 'cap':
+                df_cleaned[col] = df_cleaned[col].clip(lower=lower_bound, upper=upper_bound)
+            elif action == 'remove':
+                df_cleaned = df_cleaned[~outliers]
+            elif action == 'flag':
+                df_cleaned[f'{col}_outlier'] = outliers
+            
+            outlier_info[col] = {
+                'count': outlier_count,
+                'percentage': (outlier_count / len(df)) * 100,
+                'lower_bound': lower_bound,
+                'upper_bound': upper_bound
+            }
+    
+    print("\nOutlier Detection Results:")
+    for col, info in outlier_info.items():
+        print(f"{col}: {info['count']} outliers ({info['percentage']:.2f}%)")
+    
+    return df_cleaned, outlier_info
+
+# Detect and handle outliers
+numeric_columns = ['yield_tons', 'rainfall_mm', 'temperature_avg', 'fertilizer_kg']
+crop_yield_clean, outlier_info = detect_and_handle_outliers(
+    crop_yield_clean, 
+    numeric_columns, 
+    method='iqr', 
+    action='cap'
+)
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 7: Normalize Data
+# ============================================================================
+
+def normalize_data(df, columns, method='minmax'):
+    """
+    Normalize numerical data
+    Methods: 'minmax' (0-1), 'zscore' (standardization)
+    """
+    df_normalized = df.copy()
+    
+    for col in columns:
+        if col not in df_normalized.columns:
+            continue
+            
+        if method == 'minmax':
+            min_val = df_normalized[col].min()
+            max_val = df_normalized[col].max()
+            df_normalized[f'{col}_normalized'] = (df_normalized[col] - min_val) / (max_val - min_val)
+        
+        elif method == 'zscore':
+            mean_val = df_normalized[col].mean()
+            std_val = df_normalized[col].std()
+            df_normalized[f'{col}_normalized'] = (df_normalized[col] - mean_val) / std_val
+    
+    print(f"\nNormalization complete using {method} method")
+    print(f"Original columns: {columns}")
+    print(f"New normalized columns: {[f'{col}_normalized' for col in columns]}")
+    
+    return df_normalized
+
+# Normalize specific columns
+columns_to_normalize = ['yield_tons', 'rainfall_mm', 'temperature_avg']
+crop_yield_normalized = normalize_data(crop_yield_clean, columns_to_normalize, method='minmax')
+print("\nNormalized Data Sample:")
+print(crop_yield_normalized[['yield_tons', 'yield_tons_normalized']].head())
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 8: Descriptive Statistics
+# ============================================================================
+
+def calculate_descriptive_stats(df, numeric_only=True):
+    """
+    Calculate comprehensive descriptive statistics
+    """
+    if numeric_only:
+        df_numeric = df.select_dtypes(include=[np.number])
+    else:
+        df_numeric = df
+    
+    stats = df_numeric.describe()
+    
+    # Additional statistics
+    additional_stats = pd.DataFrame({
+        'skewness': df_numeric.skew(),
+        'kurtosis': df_numeric.kurtosis(),
+        'variance': df_numeric.var()
+    })
+    
+    print("Descriptive Statistics:")
+    print(stats)
+    print("\nAdditional Statistics:")
+    print(additional_stats)
+    
+    return stats, additional_stats
+
+# Calculate statistics
+stats, additional_stats = calculate_descriptive_stats(crop_yield_clean)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 9: Visualize Data Distributions
+# ============================================================================
+
+def plot_distributions(df, columns, figsize=(15, 10)):
+    """
+    Plot distributions of numerical variables
+    """
+    n_cols = len(columns)
+    n_rows = (n_cols + 2) // 3
+    
+    fig, axes = plt.subplots(n_rows, 3, figsize=figsize)
+    axes = axes.flatten()
+    
+    for idx, col in enumerate(columns):
+        if col in df.columns:
+            # Histogram with KDE
+            axes[idx].hist(df[col].dropna(), bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+            axes[idx].set_title(f'Distribution of {col}', fontsize=10, fontweight='bold')
+            axes[idx].set_xlabel(col)
+            axes[idx].set_ylabel('Frequency')
+            axes[idx].grid(True, alpha=0.3)
+    
+    # Hide empty subplots
+    for idx in range(len(columns), len(axes)):
+        axes[idx].axis('off')
+    
+    plt.tight_layout()
+    plt.savefig('distribution_plots.png', dpi=300, bbox_inches='tight')
+    print("Distribution plots saved as 'distribution_plots.png'")
+    plt.show()
+
+# Plot distributions
+columns_to_plot = ['yield_tons', 'rainfall_mm', 'temperature_avg', 'fertilizer_kg', 'yield_per_hectare']
+plot_distributions(crop_yield_clean, columns_to_plot)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 10: Visualize Trends Over Time
+# ============================================================================
+
+def plot_trends(df, x_col, y_col, group_col=None, figsize=(12, 6)):
+    """
+    Plot trends over time or categories
+    """
+    plt.figure(figsize=figsize)
+    
+    if group_col and group_col in df.columns:
+        for group in df[group_col].unique():
+            subset = df[df[group_col] == group]
+            grouped = subset.groupby(x_col)[y_col].mean()
+            plt.plot(grouped.index, grouped.values, marker='o', label=group, linewidth=2)
+        plt.legend(title=group_col)
+    else:
+        grouped = df.groupby(x_col)[y_col].mean()
+        plt.plot(grouped.index, grouped.values, marker='o', linewidth=2, color='steelblue')
+    
+    plt.title(f'Trend of {y_col} over {x_col}', fontsize=14, fontweight='bold')
+    plt.xlabel(x_col, fontsize=12)
+    plt.ylabel(f'Average {y_col}', fontsize=12)
+    plt.grid(True, alpha=0.3)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig('trend_plots.png', dpi=300, bbox_inches='tight')
+    print("Trend plots saved as 'trend_plots.png'")
+    plt.show()
+
+# Plot trends
+plot_trends(crop_yield_clean, 'year', 'yield_tons', group_col='crop_type')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 11: Correlation Analysis
+# ============================================================================
+def analyze_correlations(df, method='pearson', figsize=(10, 8)):
+    """
+    Calculate and visualize correlations between variables
+    Methods: 'pearson', 'spearman', 'kendall'
+    """
+    # Select numeric columns only
+    numeric_df = df.select_dtypes(include=[np.number])
+    
+    # Calculate correlation matrix
+    corr_matrix = numeric_df.corr(method=method)
+    
+    # Create heatmap
+    plt.figure(figsize=figsize)
+    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', 
+                center=0, square=True, linewidths=1, cbar_kws={"shrink": 0.8})
+    plt.title(f'Correlation Matrix ({method.capitalize()})', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig('correlation_heatmap.png', dpi=300, bbox_inches='tight')
+    print("Correlation heatmap saved as 'correlation_heatmap.png'")
+    plt.show()
+    
+    # Print strong correlations
+    print(f"\nStrong Correlations (|r| > 0.5):")
+    for i in range(len(corr_matrix.columns)):
+        for j in range(i+1, len(corr_matrix.columns)):
+            if abs(corr_matrix.iloc[i, j]) > 0.5:
+                print(f"{corr_matrix.columns[i]} <-> {corr_matrix.columns[j]}: {corr_matrix.iloc[i, j]:.3f}")
+    
+    return corr_matrix
+
+# Analyze correlations
+correlation_matrix = analyze_correlations(crop_yield_clean, method='pearson')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 12: Scatter Plots for Relationships
+# ============================================================================
+
+def plot_scatter_relationships(df, x_col, y_col, hue_col=None, figsize=(10, 6)):
+    """
+    Create scatter plots to visualize relationships
+    """
+    plt.figure(figsize=figsize)
+    
+    if hue_col and hue_col in df.columns:
+        for category in df[hue_col].unique():
+            subset = df[df[hue_col] == category]
+            plt.scatter(subset[x_col], subset[y_col], label=category, alpha=0.6, s=50)
+        plt.legend(title=hue_col)
+    else:
+        plt.scatter(df[x_col], df[y_col], alpha=0.6, s=50, color='steelblue')
+    
+    plt.title(f'{y_col} vs {x_col}', fontsize=14, fontweight='bold')
+    plt.xlabel(x_col, fontsize=12)
+    plt.ylabel(y_col, fontsize=12)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('scatter_plots.png', dpi=300, bbox_inches='tight')
+    print("Scatter plots saved as 'scatter_plots.png'")
+    plt.show()
+
+# Create scatter plots
+plot_scatter_relationships(crop_yield_clean, 'rainfall_mm', 'yield_tons', hue_col='crop_type')
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 13: Box Plots for Group Comparison
+# ============================================================================
+
+def plot_boxplots(df, category_col, value_col, figsize=(12, 6)):
+    """
+    Create box plots to compare distributions across categories
+    """
+    plt.figure(figsize=figsize)
+    
+    # Prepare data
+    categories = df[category_col].unique()
+    data_to_plot = [df[df[category_col] == cat][value_col].dropna() for cat in categories]
+    
+    bp = plt.boxplot(data_to_plot, labels=categories, patch_artist=True, 
+                     notch=True, showmeans=True)
+    
+    # Customize colors
+    colors = plt.cm.Set3(range(len(categories)))
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+    
+    plt.title(f'{value_col} by {category_col}', fontsize=14, fontweight='bold')
+    plt.xlabel(category_col, fontsize=12)
+    plt.ylabel(value_col, fontsize=12)
+    plt.xticks(rotation=45)
+    plt.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+    plt.savefig('boxplots.png', dpi=300, bbox_inches='tight')
+    print("Box plots saved as 'boxplots.png'")
+    plt.show()
+
+# Create box plots
+plot_boxplots(crop_yield_clean, 'crop_type', 'yield_tons')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================================
+# Cell 14: Save Cleaned Data
+# ============================================================================
+
+def save_processed_data(df, filename, format='csv'):
+    """
+    Save processed data to file
+    Formats: 'csv', 'excel', 'json'
+    """
+    if format == 'csv':
+        df.to_csv(filename + '.csv', index=False)
+        print(f"Data saved to {filename}.csv")
+    elif format == 'excel':
+        df.to_excel(filename + '.xlsx', index=False)
+        print(f"Data saved to {filename}.xlsx")
+    elif format == 'json':
+        df.to_json(filename + '.json', orient='records', indent=2)
+        print(f"Data saved to {filename}.json")
+
+# Save all processed datasets
+save_processed_data(weather_data, 'weather_data_cleaned', format='csv')
+save_processed_data(soil_data, 'soil_data_cleaned', format='csv')
+save_processed_data(crop_yield_clean, 'crop_yield_data_cleaned', format='csv')
+
+print("\n" + "="*70)
+print("AGRICULTURAL DATA ANALYSIS COMPLETE!")
+print("="*70)
+print(f"\nTotal records processed:")
+print(f"  - Weather data: {len(weather_data)} records")
+print(f"  - Soil data: {len(soil_data)} records")
+print(f"  - Crop yield data: {len(crop_yield_clean)} records")
+print("\nAll visualizations and cleaned data have been saved!")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
